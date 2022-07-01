@@ -117,15 +117,15 @@ impl GetHeight for PrunedRpcBlockchain {
 impl WalletSync for PrunedRpcBlockchain {
     fn wallet_setup<D: BatchDatabase>(
         &self,
-        database: &mut D,
-        progress_update: Box<dyn Progress>,
+        _database: &mut D,
+        _progress_update: Box<dyn Progress>,
     ) -> Result<(), Error> {
         todo!()
     }
 
     fn wallet_sync<D: BatchDatabase>(
         &self,
-        db: &mut D,
+        _db: &mut D,
         _progress_update: Box<dyn Progress>,
     ) -> Result<(), Error> {
         todo!()
