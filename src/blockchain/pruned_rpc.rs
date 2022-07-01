@@ -118,14 +118,68 @@ impl WalletSync for PrunedRpcBlockchain {
     fn wallet_setup<D: BatchDatabase>(
         &self,
         database: &mut D,
-        progress_update: Box<dyn Progress>,
+        _progress_update: Box<dyn Progress>,
     ) -> Result<(), Error> {
+        let mut script_pubkeys = database.iter_script_pubkeys(Some(KeychainKind::External))?;
+        script_pubkeys.extend(database.iter_script_pubkeys(Some(KeychainKind::Internal)));
+
+        debug!(
+            "importing {} script_pubkeys (some maybe aleady imported)",
+            script_pubkeys.len()
+        );
+
+        if self.is_descriptors {
+            let requests = Value::Array(
+                script_pubkeys
+                    .iter()
+                    .map(|s| {
+                        let desc = format!("raw({})", s.to_hex);
+                        jsom!({
+                            "timestamp": "now",
+                            "desc": format!("{}#{}", desc, get_checksum(&desc).unwrap()),
+                        })
+                    })
+                    .collect(),
+            );
+            let res: Vec<Value> = self.client.call("importdescriptors", &[requests])?;
+            res.into_iter()
+                .map(|v| match v["success"].as_bool() {
+                    Some(true) => Ok(()),
+                    Some(false) => Err(Error::Generic(
+                        v["error"]["message"]
+                            .as_str()
+                            .unwrap_or("Unknown error")
+                            .to_string(),
+                    )),
+                    _ => Err(Error::Generic("Unexpected response from Core".to_string())),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+        } else {
+            let requests: Vec<_> = script_pubkeys
+                .iter()
+                .map(|s| ImportMultiRequest {
+                    timestamp: ImportMultiRescanSince::Timestamp(0),
+                    script_pubkeys: Some(ImportMultiRequestScriptPubkey::Script(s)),
+                    watchonly: Some(true),
+                    ..Default::default()
+                })
+                .collect();
+            let options = ImportMultiOptions {
+                rescan: Some(false),
+            };
+            self.client.import_multi(&requests, Some(&options))?;
+        }
+
+        // make a request using scantxout and loop through it here
+        // the scan needs to have all the descriptors in it
+        // see how to make sure you're scanning the minimum possible set
+
         todo!()
     }
 
     fn wallet_sync<D: BatchDatabase>(
         &self,
-        db: &mut D,
+        _db: &mut D,
         _progress_update: Box<dyn Progress>,
     ) -> Result<(), Error> {
         todo!()
